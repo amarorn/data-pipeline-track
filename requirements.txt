@@ -1,0 +1,47 @@
+pandas
+sqlalchemy
+oracledb
+clickhouse-driver
+pyyaml
+python-dotenv
+# ============================================
+# Data Pipeline - Requirements
+# ============================================
+
+# Core Spark
+pyspark==3.4.1
+
+# Data Processing
+pandas==2.0.3
+numpy==1.24.3
+pyarrow==12.0.1
+
+# Database Drivers
+cx-Oracle==8.3.0
+clickhouse-driver==0.2.6
+clickhouse-connect==0.6.14
+
+# AWS S3
+boto3==1.28.57
+s3fs==2023.9.2
+
+# Configuration
+python-dotenv==1.0.0
+pyyaml==6.0.1
+
+# Logging
+loguru==0.7.2
+
+# Utilities
+python-dateutil==2.8.2
+
+# ============================================
+# Hadoop AWS JARs (adicionar manualmente)
+# ============================================
+# Baixe e coloque em $SPARK_HOME/jars/:
+# - hadoop-aws-3.3.4.jar
+# - aws-java-sdk-bundle-1.12.262.jar
+# 
+# Download:
+# https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/
+# https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.262/
