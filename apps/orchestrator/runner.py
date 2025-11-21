@@ -5,7 +5,7 @@ Dispara pipelines entre domínios e camadas
 import argparse
 import yaml
 from pathlib import Path
-from typing import List, Dict
+from typing import List, Dict, Optional
 from datetime import datetime
 import sys
 

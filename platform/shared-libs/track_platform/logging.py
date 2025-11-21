@@ -1,10 +1,11 @@
 import logging
+from pathlib import Path
 from typing import Optional
 
 _LOGGERS = {}
 
 
-def setup_logger(name: str, level: int = logging.INFO) -> logging.Logger:
+def setup_logger(name: str, level: int = logging.INFO, log_file: Optional[Path] = None) -> logging.Logger:
     logger = _LOGGERS.get(name)
     if logger is not None:
         return logger
@@ -17,6 +18,11 @@ def setup_logger(name: str, level: int = logging.INFO) -> logging.Logger:
         )
         handler.setFormatter(formatter)
         logger.addHandler(handler)
+        if log_file is not None:
+            log_file.parent.mkdir(parents=True, exist_ok=True)
+            file_handler = logging.FileHandler(log_file)
+            file_handler.setFormatter(formatter)
+            logger.addHandler(file_handler)
     _LOGGERS[name] = logger
     return logger
 
