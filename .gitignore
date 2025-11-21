@@ -1,3 +1,7 @@
+# ============================================
+# Track Data Platform - .gitignore
+# ============================================
+
 # Python
 __pycache__/
 *.py[cod]
@@ -16,62 +20,122 @@ parts/
 sdist/
 var/
 wheels/
+pip-wheel-metadata/
+share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
 # Virtual Environment
 .venv/
 venv/
 ENV/
 env/
+.virtualenv/
 
-# IDE
+# IDEs
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
 .DS_Store
+*.sublime-project
+*.sublime-workspace
 
 # Jupyter
 .ipynb_checkpoints/
 *.ipynb_checkpoints
+notebooks/.ipynb_checkpoints/
 
-# Environment
+# Environment & Secrets
 .env
 .env.local
+.env.*.local
+*.pem
+*.key
+secrets/
 
-# Data (apenas local, não commitamos dados)
-data/
+# Logs (gerados automaticamente)
+logs/
+*.log
+*.log.*
+
+# Temporary files (auto-cleanup)
 temp/
+tmp/
+*.tmp
+.cache/
+*.cache
+
+# Data files (não commitamos dados)
+data/
 *.parquet
 *.csv
 *.json
-
-# Logs
-logs/
-*.log
-
-# Metadata
-metadata/
-
-# Docker
-*.log
-docker-compose.override.yml
+*.avro
+*.orc
 
 # Spark
 derby.log
 metastore_db/
 spark-warehouse/
+.spark-warehouse/
 
 # ClickHouse local
 clickhouse/
+clickhouse-data/
 
-# Temporary files
-tmp/
-*.tmp
-.cache/
+# Terraform
+platform/infra/terraform/.terraform/
+platform/infra/terraform/*.tfstate
+platform/infra/terraform/*.tfstate.*
+platform/infra/terraform/.terraform.lock.hcl
+platform/infra/terraform/terraform.tfvars
+
+# Docker
+docker-compose.override.yml
+*.dockerignore
+
+# Coverage & Testing
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.tox/
+coverage.xml
+*.cover
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Ruff
+.ruff_cache/
 
 # OS
 Thumbs.db
+.DS_Store
+*.swp
+*.swo
+
+# Archives
+*.zip
+*.tar
+*.tar.gz
+*.rar
+*.7z
+
+# Compiled
+*.pyc
+*.pyo
+*.pyd
+
+# Metadata gerado
+platform/metadata/
+apps/metadata-service/data/
+
+# Build artifacts
+*.whl

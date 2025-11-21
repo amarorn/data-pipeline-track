@@ -1,0 +1,99 @@
+name: Test & Lint
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  lint:
+    name: Lint Code
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install black ruff mypy
+
+      - name: Run Black
+        run: black --check .
+
+      - name: Run Ruff
+        run: ruff check .
+
+      - name: Run MyPy
+        run: mypy --ignore-missing-imports platform/shared-libs domains/
+
+  test-shared-libs:
+    name: Test Shared Libraries
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        working-directory: platform/shared-libs
+        run: |
+          pip install -e ".[dev]"
+
+      - name: Run tests
+        working-directory: platform/shared-libs
+        run: |
+          pytest tests/ --cov=track_platform --cov-report=xml
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./platform/shared-libs/coverage.xml
+
+  test-domains:
+    name: Test Domains
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        domain: [data-pipeline]
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install shared libs
+        working-directory: platform/shared-libs
+        run: pip install -e .
+
+      - name: Install domain dependencies
+        working-directory: domains/${{ matrix.domain }}
+        run: pip install -e ".[dev]"
+
+      - name: Run domain tests
+        working-directory: domains/${{ matrix.domain }}
+        run: pytest tests/ --cov
+
+  validate-configs:
+    name: Validate Configurations
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Validate YAML configs
+        run: |
+          pip install pyyaml
+          python ci/scripts/validate_configs.py
