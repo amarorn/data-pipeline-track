@@ -1,0 +1,30 @@
+name: Validate Pull Request Template
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize]
+
+jobs:
+  validate-template:
+    name: Ensure PR template is respected
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate required sections
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = (context.payload.pull_request.body || '').toLowerCase();
+            const requiredHeadings = [
+              '## resumo',
+              '## motivação/contexto',
+              '## teste/validação',
+              '## checklist'
+            ];
+
+            const missing = requiredHeadings.filter((heading) => !body.includes(heading));
+
+            if (missing.length > 0) {
+              core.setFailed(
+                `O corpo do PR está faltando as seções obrigatórias: ${missing.join(', ')}`
+              );
+            }
