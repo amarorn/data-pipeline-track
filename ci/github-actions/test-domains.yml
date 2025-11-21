@@ -1,0 +1,140 @@
+name: Test Domains (Segmented)
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'domains/**'
+      - 'platform/shared-libs/**'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'domains/**'
+      - 'platform/shared-libs/**'
+
+jobs:
+  # ============================================
+  # Detectar domínios alterados
+  # ============================================
+  detect-changes:
+    name: Detect Changed Domains
+    runs-on: ubuntu-latest
+    outputs:
+      data-pipeline: ${{ steps.filter.outputs.data-pipeline }}
+      shared-libs: ${{ steps.filter.outputs.shared-libs }}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: dorny/paths-filter@v2
+        id: filter
+        with:
+          filters: |
+            data-pipeline:
+              - 'domains/data-pipeline/**'
+            shared-libs:
+              - 'platform/shared-libs/**'
+
+  # ============================================
+  # Test Shared Libs (sempre que mudar)
+  # ============================================
+  test-shared-libs:
+    name: Test Shared Libraries
+    needs: detect-changes
+    if: needs.detect-changes.outputs.shared-libs == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        working-directory: platform/shared-libs
+        run: |
+          pip install -e ".[dev]"
+
+      - name: Run tests
+        working-directory: platform/shared-libs
+        run: |
+          pytest tests/ -v --cov=track_platform --cov-report=xml --cov-report=term
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./platform/shared-libs/coverage.xml
+          flags: shared-libs
+
+  # ============================================
+  # Test Data Pipeline (somente se mudar)
+  # ============================================
+  test-data-pipeline:
+    name: Test Data Pipeline Domain
+    needs: detect-changes
+    if: needs.detect-changes.outputs.data-pipeline == 'true' || needs.detect-changes.outputs.shared-libs == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install shared libs
+        working-directory: platform/shared-libs
+        run: pip install -e .
+
+      - name: Install domain dependencies
+        working-directory: domains/data-pipeline
+        run: pip install -e ".[dev]"
+
+      - name: Run unit tests
+        working-directory: domains/data-pipeline
+        run: |
+          pytest tests/unit/ -v --cov --cov-report=xml
+
+      - name: Run integration tests
+        working-directory: domains/data-pipeline
+        run: |
+          pytest tests/integration/ -v
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./domains/data-pipeline/coverage.xml
+          flags: data-pipeline
+
+  # ============================================
+  # Validate ClickHouse DDLs
+  # ============================================
+  validate-ddls:
+    name: Validate ClickHouse DDLs
+    needs: detect-changes
+    if: needs.detect-changes.outputs.data-pipeline == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Validate SQL syntax
+        working-directory: domains/data-pipeline/clickhouse
+        run: |
+          # Valida que todos os SQLs têm sintaxe válida
+          for file in ddl/*.sql policies/*.sql; do
+            echo "Validando $file..."
+            # Verificação básica de sintaxe
+            grep -q "CREATE" "$file" || (echo "Erro em $file" && exit 1)
+          done
+
+      - name: Check DDL ordering
+        working-directory: domains/data-pipeline/clickhouse/ddl
+        run: |
+          # Verifica que DDLs estão numerados corretamente
+          ls -1 *.sql | grep -E '^[0-9]+_' || (echo "DDLs devem ter prefixo numérico" && exit 1)

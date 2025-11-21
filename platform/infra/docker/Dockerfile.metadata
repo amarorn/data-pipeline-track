@@ -1,0 +1,26 @@
+FROM python:3.11-slim
+
+LABEL maintainer="Track Data Team"
+LABEL description="Track Platform - Metadata Service"
+
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+WORKDIR /app
+
+# Instala dependências
+RUN pip install --no-cache-dir \
+    fastapi==0.104.1 \
+    uvicorn[standard]==0.24.0 \
+    pyyaml==6.0.1 \
+    python-dotenv==1.0.0
+
+# Copia código do metadata service
+COPY apps/metadata-service /app/apps/metadata-service
+
+# Cria diretórios
+RUN mkdir -p /app/platform/metadata
+
+EXPOSE 8000
+
+CMD ["uvicorn", "apps.metadata-service.api:app", "--host", "0.0.0.0", "--port", "8000"]

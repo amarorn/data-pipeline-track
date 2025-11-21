@@ -1,0 +1,35 @@
+# Configuração de orquestração Track Platform
+# Define ordem de execução e dependências entre domínios
+
+domains:
+  - name: data-pipeline
+    enabled: true
+    fail_fast: false  # Continua mesmo se falhar
+    layers:
+      - bronze
+      - silver
+      - gold
+    schedule:
+      bronze: "0 2 * * *"     # 02:00 diário
+      silver: "0 4 * * *"     # 04:00 diário (após bronze)
+      gold: "0 6 * * *"       # 06:00 diário (após silver)
+    sla_hours:
+      bronze: 2
+      silver: 2
+      gold: 1
+    alerts:
+      email: data-team@track.com
+      slack: "#data-alerts"
+
+  # Placeholder para futuros domínios
+  # - name: analytics-pipeline
+  #   enabled: false
+  #   ...
+
+global_settings:
+  max_parallel_domains: 3
+  retry_attempts: 3
+  retry_delay_seconds: 300
+  monitoring:
+    enabled: true
+    endpoint: "https://monitoring.track.com/metrics"
