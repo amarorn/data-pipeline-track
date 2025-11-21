@@ -1,25 +1,50 @@
 version: "3.9"
 version: '3.8'
 
+# ============================================
+# Track Data Platform - Docker Compose
+# Ambiente de desenvolvimento local
+# ============================================
+
 services:
   # ============================================
-  # Pipeline Runner - Executa ETL
+  # Orchestrator - Orquestra pipelines
   # ============================================
-  pipeline:
+  orchestrator:
     build:
       context: .
-      dockerfile: Dockerfile.app
-    container_name: data-pipeline-runner
+      dockerfile: platform/infra/docker/Dockerfile.orchestrator
+    container_name: track-orchestrator
     env_file:
       - .env
     volumes:
-      - ./layers:/app/layers
-      - ./shared:/app/shared
+      - ./platform/shared-libs:/app/platform/shared-libs
+      - ./domains:/app/domains
+      - ./apps/orchestrator:/app/apps/orchestrator
       - ./logs:/app/logs
       - ./temp:/app/temp
-    command: python -m shared.runner --layer all
+    command: python -m apps.orchestrator.runner --domain data-pipeline --layer all
     networks:
-      - pipeline-network
+      - track-network
+    restart: unless-stopped
+
+  # ============================================
+  # Metadata Service - Catálogo e lineage
+  # ============================================
+  metadata-service:
+    build:
+      context: .
+      dockerfile: platform/infra/docker/Dockerfile.metadata
+    container_name: track-metadata-service
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./apps/metadata-service:/app/apps/metadata-service
+      - ./platform/metadata:/app/platform/metadata
+    networks:
+      - track-network
     restart: unless-stopped
 
   # ============================================
@@ -28,24 +53,31 @@ services:
   jupyter:
     build:
       context: .
-      dockerfile: Dockerfile.jupyter-spark
-    container_name: data-pipeline-jupyter
+      dockerfile: platform/infra/docker/Dockerfile.jupyter
+    container_name: track-jupyter
     ports:
       - "8888:8888"
     env_file:
       - .env
     volumes:
       - ./notebooks:/app/notebooks
-      - ./layers:/app/layers
-      - ./shared:/app/shared
+      - ./platform/shared-libs:/app/platform/shared-libs
+      - ./domains:/app/domains
       - ./temp:/app/temp
     networks:
-      - pipeline-network
+      - track-network
     restart: unless-stopped
+    environment:
+      JUPYTER_ENABLE_LAB: "yes"
 
 networks:
-  pipeline-network:
+  track-network:
     driver: bridge
+    name: track-platform-network
+
+volumes:
+  metadata-db:
+    name: track-metadata-db
 services:
   spark-master:
     image: bitnami/spark:latest

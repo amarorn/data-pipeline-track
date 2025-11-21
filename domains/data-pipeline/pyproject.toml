@@ -1,0 +1,34 @@
+[project]
+name = "track-data-pipeline"
+version = "1.0.0"
+description = "Pipeline de dados Track - Oracle para ClickHouse Cloud"
+requires-python = ">=3.11"
+dependencies = [
+    "track-platform>=1.0.0",  # Usa bibliotecas compartilhadas
+    "pyspark>=3.4.1",
+    "pandas>=2.0.3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.7.0",
+    "ruff>=0.0.287",
+    "mypy>=1.5.0",
+]
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+include = '\.pyi?$'
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "I", "N", "W"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_functions = "test_*"

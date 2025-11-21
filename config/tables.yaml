@@ -1,5 +1,0 @@
-tables:
-  sample_table:
-    source_table: SCHEMA.MY_SOURCE_TABLE
-    incremental_column: UPDATED_AT
-    target_table: default.sample_table

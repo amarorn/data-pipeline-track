@@ -1,0 +1,70 @@
+name: Lint & Code Quality
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  lint-python:
+    name: Lint Python Code
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install linters
+        run: |
+          pip install black==23.7.0 ruff==0.0.287 mypy==1.5.0
+
+      - name: Run Black
+        run: |
+          black --check --diff platform/shared-libs domains/ apps/
+
+      - name: Run Ruff
+        run: |
+          ruff check platform/shared-libs domains/ apps/
+
+      - name: Run MyPy
+        run: |
+          mypy --ignore-missing-imports platform/shared-libs domains/ apps/
+
+  lint-yaml:
+    name: Lint YAML Configs
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Validate YAML files
+        run: |
+          pip install pyyaml yamllint
+          yamllint -c .yamllint domains/*/configs/*.yaml apps/*/configs/*.yaml
+
+      - name: Check config schemas
+        run: |
+          python ci/scripts/validate_configs.py
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Run Bandit
+        run: |
+          pip install bandit
+          bandit -r platform/shared-libs domains/ apps/ -f json -o bandit-report.json
+
+      - name: Upload security report
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-report
+          path: bandit-report.json

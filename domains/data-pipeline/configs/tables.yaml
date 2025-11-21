@@ -1,0 +1,74 @@
+# Configuração de ingestão de tabelas - Domínio: data-pipeline
+# Owner: Data Team Track
+# SLA: Diário às 02:00 UTC-3
+
+bronze_tables:
+  # Tabelas Oracle
+  - name: customers
+    source:
+      type: oracle
+      schema: SALES
+      table: CUSTOMERS
+    ingestion:
+      mode: incremental
+      partition_column: ID
+      incremental_column: UPDATED_AT
+      num_partitions: 10
+      fetch_size: 10000
+    quality:
+      row_count_min: 1000
+      freshness_hours: 24
+    metadata:
+      domain: sales
+      owner: data-team@track.com
+      pii: true
+      retention_days: 2555  # 7 anos
+
+  - name: orders
+    source:
+      type: oracle
+      schema: SALES
+      table: ORDERS
+    ingestion:
+      mode: incremental
+      partition_column: ORDER_ID
+      incremental_column: ORDER_DATE
+      num_partitions: 20
+      fetch_size: 10000
+    quality:
+      row_count_min: 5000
+      freshness_hours: 6
+    metadata:
+      domain: sales
+      owner: data-team@track.com
+      pii: false
+      retention_days: 2555
+
+silver_transformations:
+  customers:
+    source: bronze.oracle.customers
+    transformations:
+      - type: clean_strings
+        columns: [name, email, phone]
+        trim_spaces: true
+        upper_case: false
+      - type: deduplicate
+        subset: [id]
+      - type: validate_schema
+        schema:
+          id: integer
+          name: string
+          email: string
+          created_at: timestamp
+    partition_by: [created_date]
+
+gold_metrics:
+  daily_sales_summary:
+    source: silver.sales.orders
+    aggregations:
+      group_by: [order_date]
+      metrics:
+        total_amount: [sum, avg, max]
+        order_id: [count]
+        customer_id: [countDistinct]
+    schedule: "0 3 * * *"  # 03:00 diário

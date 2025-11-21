@@ -1,0 +1,37 @@
+FROM jupyter/pyspark-notebook:spark-3.4.1
+
+USER root
+
+# Instala dependências adicionais
+RUN apt-get update && apt-get install -y \
+    curl \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+# Baixa JARs necessários
+RUN cd $SPARK_HOME/jars && \
+    wget -q https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar && \
+    wget -q https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.262/aws-java-sdk-bundle-1.12.262.jar && \
+    wget -q https://repo1.maven.org/maven2/com/oracle/database/jdbc/ojdbc8/21.9.0.0/ojdbc8-21.9.0.0.jar && \
+    wget -q https://repo1.maven.org/maven2/com/clickhouse/clickhouse-jdbc/0.4.6/clickhouse-jdbc-0.4.6-all.jar
+
+USER ${NB_UID}
+
+WORKDIR /app
+
+# Copia e instala track-platform
+COPY --chown=${NB_UID}:${NB_GID} platform/shared-libs /app/platform/shared-libs
+RUN pip install -e /app/platform/shared-libs
+
+# Instala dependências adicionais para notebooks
+COPY --chown=${NB_UID}:${NB_GID} requirements-jupyter.txt /tmp/
+RUN pip install --no-cache-dir -r /tmp/requirements-jupyter.txt
+
+# Configurações Jupyter
+RUN mkdir -p /home/jovyan/.jupyter && \
+    echo "c.NotebookApp.token = ''" >> /home/jovyan/.jupyter/jupyter_notebook_config.py && \
+    echo "c.NotebookApp.password = ''" >> /home/jovyan/.jupyter/jupyter_notebook_config.py
+
+EXPOSE 8888
+
+CMD ["jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser"]
