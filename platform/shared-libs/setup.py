@@ -1,10 +1,17 @@
 """
 Setup para Track Platform - Bibliotecas compartilhadas
 """
+from pathlib import Path
+
 from setuptools import setup, find_packages
 
-with open("README.md", "r", encoding="utf-8") as fh:
-    long_description = fh.read()
+base_dir = Path(__file__).resolve().parent
+readme_path = base_dir / "README.md"
+
+if readme_path.exists():
+    long_description = readme_path.read_text(encoding="utf-8")
+else:
+    long_description = ""
 
 setup(
     name="track-platform",
@@ -25,11 +32,11 @@ setup(
     install_requires=[
         "pyspark>=3.4.1",
         "pandas>=2.0.3",
-        "cx-Oracle>=8.3.0",
         "clickhouse-driver>=0.2.6",
         "clickhouse-connect>=0.6.14",
-        "boto3>=1.28.57",
-        "s3fs>=2023.9.2",
+        "boto3==1.28.17",
+        "botocore==1.31.17",
+        "s3fs==2023.9.2",
         "python-dotenv>=1.0.0",
         "pyyaml>=6.0.1",
         "loguru>=0.7.2",
