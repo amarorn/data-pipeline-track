@@ -139,3 +139,10 @@ apps/metadata-service/data/
 
 # Build artifacts
 *.whl
+.aiassistant/rules/code_qualit.md
+.gitignore
+.gitignore
+.cursor/contexto.md
+.gitignore
+.gitignore
+.cursor/rules/dataengineeringarchitect.mdc
