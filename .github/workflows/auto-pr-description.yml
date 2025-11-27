@@ -16,15 +16,18 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Generate Contextual Summary
-        id: generate-summary
+      - name: Generate PR Description
+        id: generate-description
         run: |
           BASE_SHA="${{ github.event.pull_request.base.sha }}"
           HEAD_SHA="${{ github.event.pull_request.head.sha }}"
           
-          COMMITS=$(git log --format="%s" ${BASE_SHA}..${HEAD_SHA})
+          COMMITS=$(git log --format="%s|%h" ${BASE_SHA}..${HEAD_SHA})
           FILES_CHANGED=$(git diff --name-only ${BASE_SHA}..${HEAD_SHA})
           FILES_STATS=$(git diff --stat ${BASE_SHA}..${HEAD_SHA})
+          
+          echo "## 📋 Resumo do Pull Request" > pr_description.md
+          echo "" >> pr_description.md
           
           MAIN_AREAS=()
           SPECIFIC_CHANGES=()
@@ -80,30 +83,6 @@ jobs:
             fi
           fi
           
-          if echo "$FILES_CHANGED" | grep -qi "Dockerfile"; then
-            MAIN_AREAS+=("containers Docker")
-            DOCKERFILE_COUNT=$(echo "$FILES_CHANGED" | grep -c "Dockerfile" || echo "0")
-            SPECIFIC_CHANGES+=("$DOCKERFILE_COUNT Dockerfile(s) atualizado(s)")
-          fi
-          
-          FEATURES=()
-          FIXES=()
-          REFACTORS=()
-          DOCS=()
-          
-          while IFS= read -r commit_msg; do
-            CLEAN_MSG=$(echo "$commit_msg" | sed 's/^[^:]*:\s*//' | sed 's/^[^:]*:\s*//')
-            if [[ $commit_msg =~ ^(feat|feature)(\(.+\))?: ]]; then
-              FEATURES+=("$CLEAN_MSG")
-            elif [[ $commit_msg =~ ^(fix|bugfix)(\(.+\))?: ]]; then
-              FIXES+=("$CLEAN_MSG")
-            elif [[ $commit_msg =~ ^(refactor|refactoring)(\(.+\))?: ]]; then
-              REFACTORS+=("$CLEAN_MSG")
-            elif [[ $commit_msg =~ ^(docs|documentation)(\(.+\))?: ]]; then
-              DOCS+=("$CLEAN_MSG")
-            fi
-          done <<< "$COMMITS"
-          
           CONTEXTUAL_SUMMARY=""
           
           if [ ${#MAIN_AREAS[@]} -gt 0 ]; then
@@ -131,31 +110,77 @@ jobs:
                 CONTEXTUAL_SUMMARY+=", ${SPECIFIC_CHANGES[$i]}"
               fi
             done
-            CONTEXTUAL_SUMMARY+=". "
+            CONTEXTUAL_SUMMARY+="."
           fi
           
-          if [ ${#FEATURES[@]} -gt 0 ]; then
-            CONTEXTUAL_SUMMARY+="Novas funcionalidades: "
-            for i in "${!FEATURES[@]}"; do
-              if [ $i -lt 3 ]; then
-                if [ $i -gt 0 ]; then
-                  CONTEXTUAL_SUMMARY+=", "
-                fi
-                CONTEXTUAL_SUMMARY+="${FEATURES[$i]}"
-              fi
-            done
-            if [ ${#FEATURES[@]} -gt 3 ]; then
-              CONTEXTUAL_SUMMARY+=" e mais $((${#FEATURES[@]} - 3)) funcionalidade(s)"
+          if [ -z "$CONTEXTUAL_SUMMARY" ]; then
+            CONTEXTUAL_SUMMARY="Este Pull Request inclui melhorias e atualizações no projeto."
+          fi
+          
+          echo "$CONTEXTUAL_SUMMARY" >> pr_description.md
+          echo "" >> pr_description.md
+          
+          echo "### 🔍 Escopo das Mudanças" >> pr_description.md
+          echo "" >> pr_description.md
+          
+          FEATURES=()
+          FIXES=()
+          REFACTORS=()
+          DOCS=()
+          OTHERS=()
+          
+          while IFS='|' read -r commit_msg commit_hash; do
+            if [[ $commit_msg =~ ^(feat|feature)(\(.+\))?: ]]; then
+              FEATURES+=("$commit_msg")
+            elif [[ $commit_msg =~ ^(fix|bugfix)(\(.+\))?: ]]; then
+              FIXES+=("$commit_msg")
+            elif [[ $commit_msg =~ ^(refactor|refactoring)(\(.+\))?: ]]; then
+              REFACTORS+=("$commit_msg")
+            elif [[ $commit_msg =~ ^(docs|documentation)(\(.+\))?: ]]; then
+              DOCS+=("$commit_msg")
+            else
+              OTHERS+=("$commit_msg")
             fi
-            CONTEXTUAL_SUMMARY+=". "
+          done <<< "$COMMITS"
+          
+          if [ ${#FEATURES[@]} -gt 0 ]; then
+            echo "#### ✨ Novas Funcionalidades" >> pr_description.md
+            for feat in "${FEATURES[@]}"; do
+              echo "- $feat" >> pr_description.md
+            done
+            echo "" >> pr_description.md
           fi
           
           if [ ${#FIXES[@]} -gt 0 ]; then
-            CONTEXTUAL_SUMMARY+="Correções aplicadas em ${#FIXES[@]} ponto(s). "
+            echo "#### 🐛 Correções" >> pr_description.md
+            for fix in "${FIXES[@]}"; do
+              echo "- $fix" >> pr_description.md
+            done
+            echo "" >> pr_description.md
           fi
           
           if [ ${#REFACTORS[@]} -gt 0 ]; then
-            CONTEXTUAL_SUMMARY+="Refatorações realizadas para melhorar manutenibilidade. "
+            echo "#### ♻️ Refatorações" >> pr_description.md
+            for ref in "${REFACTORS[@]}"; do
+              echo "- $ref" >> pr_description.md
+            done
+            echo "" >> pr_description.md
+          fi
+          
+          if [ ${#DOCS[@]} -gt 0 ]; then
+            echo "#### 📚 Documentação" >> pr_description.md
+            for doc in "${DOCS[@]}"; do
+              echo "- $doc" >> pr_description.md
+            done
+            echo "" >> pr_description.md
+          fi
+          
+          if [ ${#OTHERS[@]} -gt 0 ]; then
+            echo "#### 📝 Outras Mudanças" >> pr_description.md
+            for other in "${OTHERS[@]}"; do
+              echo "- $other" >> pr_description.md
+            done
+            echo "" >> pr_description.md
           fi
           
           TOTAL_COMMITS=$(git rev-list --count ${BASE_SHA}..${HEAD_SHA})
@@ -163,51 +188,57 @@ jobs:
           ADDED_LINES=$(echo "$FILES_STATS" | awk '{sum+=$4} END {print sum+0}')
           REMOVED_LINES=$(echo "$FILES_STATS" | awk '{sum+=$6} END {print sum+0}')
           
-          if [ $TOTAL_COMMITS -gt 0 ]; then
-            CONTEXTUAL_SUMMARY+="Total: $TOTAL_COMMITS commit(s), $TOTAL_FILES arquivo(s) alterado(s)"
-            if [ "$ADDED_LINES" -gt 0 ] || [ "$REMOVED_LINES" -gt 0 ]; then
-              CONTEXTUAL_SUMMARY+=" (+$ADDED_LINES/-$REMOVED_LINES linhas)"
-            fi
-            CONTEXTUAL_SUMMARY+="."
-          fi
+          echo "### 📊 Estatísticas" >> pr_description.md
+          echo "" >> pr_description.md
+          echo "- **Total de commits**: $TOTAL_COMMITS" >> pr_description.md
+          echo "- **Arquivos alterados**: $TOTAL_FILES" >> pr_description.md
+          echo "- **Linhas adicionadas**: $ADDED_LINES" >> pr_description.md
+          echo "- **Linhas removidas**: $REMOVED_LINES" >> pr_description.md
+          echo "" >> pr_description.md
           
-          echo "$CONTEXTUAL_SUMMARY" > contextual_summary.txt
-          echo "summary<<EOF" >> $GITHUB_OUTPUT
-          echo "$CONTEXTUAL_SUMMARY" >> $GITHUB_OUTPUT
+          echo "### 🔗 Commits Incluídos" >> pr_description.md
+          echo "" >> pr_description.md
+          while IFS='|' read -r commit_msg commit_hash; do
+            echo "- $commit_msg ($commit_hash)" >> pr_description.md
+          done <<< "$COMMITS"
+          
+          DESCRIPTION=$(cat pr_description.md)
+          echo "description<<EOF" >> $GITHUB_OUTPUT
+          echo "$DESCRIPTION" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Update PR Description with Summary
+      - name: Update PR Description
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
-            const summary = fs.readFileSync('contextual_summary.txt', 'utf8').trim();
+            const description = fs.readFileSync('pr_description.md', 'utf8');
             
             const currentBody = context.payload.pull_request.body || '';
             
             let newBody = currentBody;
             
-            const resumoRegex = /(##\s*[Rr]esumo\s*\n\n?)(.*?)(?=\n##|\n*$)/s;
+            const resumoRegex = /(##\s*[Rr]esumo\s*\n\n?)(.*?)(?=\n##\s*[Mm]otivação|\n##\s*[Tt]este|\n##\s*[Cc]hecklist|$)/s;
             
             if (currentBody.match(resumoRegex)) {
               newBody = currentBody.replace(
                 resumoRegex,
-                `$1${summary}\n\n`
+                `$1${description}\n\n`
               );
             } else if (currentBody.includes('## Resumo') || currentBody.includes('## resumo')) {
               newBody = currentBody.replace(
                 /(##\s*[Rr]esumo\s*\n)/,
-                `$1${summary}\n\n`
+                `$1${description}\n\n`
               );
             } else if (currentBody.trim() === '' || !currentBody.includes('##')) {
-              newBody = `## Resumo\n\n${summary}\n\n${currentBody}`;
+              newBody = `${description}\n\n${currentBody}`;
             } else {
               const firstSectionMatch = currentBody.match(/^(.*?)(##\s*[Mm]otivação|##\s*[Tt]este|##\s*[Cc]hecklist|$)/s);
               if (firstSectionMatch) {
-                newBody = `${firstSectionMatch[1]}## Resumo\n\n${summary}\n\n${firstSectionMatch[2]}`;
+                newBody = `${firstSectionMatch[1]}${description}\n\n${firstSectionMatch[2]}`;
               } else {
-                newBody = `## Resumo\n\n${summary}\n\n---\n\n${currentBody}`;
+                newBody = `${description}\n\n---\n\n${currentBody}`;
               }
             }
             
