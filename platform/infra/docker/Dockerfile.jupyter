@@ -24,6 +24,7 @@ COPY --chown=${NB_UID}:${NB_GID} platform/shared-libs /app/platform/shared-libs
 RUN pip install -e /app/platform/shared-libs
 
 # Instala dependências adicionais para notebooks
+COPY --chown=${NB_UID}:${NB_GID} requirements.txt /tmp/requirements.txt
 COPY --chown=${NB_UID}:${NB_GID} requirements-jupyter.txt /tmp/
 RUN pip install --no-cache-dir -r /tmp/requirements-jupyter.txt
 

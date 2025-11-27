@@ -10,7 +10,7 @@ ENV PATH=$PATH:$SPARK_HOME/bin
 
 # Instala dependências do sistema
 RUN apt-get update && apt-get install -y \
-    openjdk-17-jre-headless \
+    openjdk-21-jre-headless \
     curl \
     wget \
     && rm -rf /var/lib/apt/lists/*
