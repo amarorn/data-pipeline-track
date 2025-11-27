@@ -16,114 +16,204 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Generate PR Description
-        id: generate-description
+      - name: Generate Contextual Summary
+        id: generate-summary
         run: |
           BASE_SHA="${{ github.event.pull_request.base.sha }}"
           HEAD_SHA="${{ github.event.pull_request.head.sha }}"
           
-          echo "## 📋 Resumo do Pull Request" > pr_description.md
-          echo "" >> pr_description.md
-          
-          echo "### 🔍 Escopo das Mudanças" >> pr_description.md
-          echo "" >> pr_description.md
-          
           COMMITS=$(git log --format="%s" ${BASE_SHA}..${HEAD_SHA})
+          FILES_CHANGED=$(git diff --name-only ${BASE_SHA}..${HEAD_SHA})
+          FILES_STATS=$(git diff --stat ${BASE_SHA}..${HEAD_SHA})
           
-          SCOPE_COUNT=0
+          MAIN_AREAS=()
+          SPECIFIC_CHANGES=()
+          
+          if echo "$FILES_CHANGED" | grep -qi "docker-compose"; then
+            MAIN_AREAS+=("infraestrutura Docker")
+            if echo "$FILES_CHANGED" | grep -qi "spark-master\|spark-worker"; then
+              SPECIFIC_CHANGES+=("cluster Spark distribuído (master + worker)")
+            fi
+            if echo "$FILES_CHANGED" | grep -qi "airflow"; then
+              SPECIFIC_CHANGES+=("stack Apache Airflow para orquestração")
+            fi
+            if echo "$FILES_CHANGED" | grep -qi "jupyter"; then
+              SPECIFIC_CHANGES+=("ambiente Jupyter com Spark integrado")
+            fi
+          fi
+          
+          if echo "$FILES_CHANGED" | grep -qi "\.github/workflows"; then
+            MAIN_AREAS+=("automações CI/CD")
+            if echo "$FILES_CHANGED" | grep -qi "auto-pr"; then
+              SPECIFIC_CHANGES+=("geração automática de descrição de PRs")
+            fi
+            if echo "$FILES_CHANGED" | grep -qi "template\|validate"; then
+              SPECIFIC_CHANGES+=("validação de templates de PR")
+            fi
+          fi
+          
+          if echo "$FILES_CHANGED" | grep -qi "notebooks"; then
+            MAIN_AREAS+=("notebooks de desenvolvimento")
+            NOTEBOOK_COUNT=$(echo "$FILES_CHANGED" | grep -c "\.ipynb" || echo "0")
+            if [ "$NOTEBOOK_COUNT" -gt 0 ]; then
+              SPECIFIC_CHANGES+=("$NOTEBOOK_COUNT notebook(s) de pipeline")
+            fi
+          fi
+          
+          if echo "$FILES_CHANGED" | grep -qi "domains.*bronze\|domains.*silver\|domains.*gold"; then
+            MAIN_AREAS+=("arquitetura de dados")
+            if echo "$FILES_CHANGED" | grep -qi "bronze"; then
+              SPECIFIC_CHANGES+=("camada Bronze (ingestão)")
+            fi
+            if echo "$FILES_CHANGED" | grep -qi "silver"; then
+              SPECIFIC_CHANGES+=("camada Silver (transformação)")
+            fi
+            if echo "$FILES_CHANGED" | grep -qi "gold"; then
+              SPECIFIC_CHANGES+=("camada Gold (analytics)")
+            fi
+          fi
+          
+          if echo "$FILES_CHANGED" | grep -qi "platform/shared-libs"; then
+            MAIN_AREAS+=("bibliotecas compartilhadas")
+            if echo "$FILES_CHANGED" | grep -qi "setup.py"; then
+              SPECIFIC_CHANGES+=("atualização de dependências")
+            fi
+          fi
+          
+          if echo "$FILES_CHANGED" | grep -qi "Dockerfile"; then
+            MAIN_AREAS+=("containers Docker")
+            DOCKERFILE_COUNT=$(echo "$FILES_CHANGED" | grep -c "Dockerfile" || echo "0")
+            SPECIFIC_CHANGES+=("$DOCKERFILE_COUNT Dockerfile(s) atualizado(s)")
+          fi
+          
           FEATURES=()
           FIXES=()
           REFACTORS=()
           DOCS=()
-          OTHERS=()
           
           while IFS= read -r commit_msg; do
+            CLEAN_MSG=$(echo "$commit_msg" | sed 's/^[^:]*:\s*//' | sed 's/^[^:]*:\s*//')
             if [[ $commit_msg =~ ^(feat|feature)(\(.+\))?: ]]; then
-              FEATURES+=("$commit_msg")
-              SCOPE_COUNT=$((SCOPE_COUNT + 1))
+              FEATURES+=("$CLEAN_MSG")
             elif [[ $commit_msg =~ ^(fix|bugfix)(\(.+\))?: ]]; then
-              FIXES+=("$commit_msg")
-              SCOPE_COUNT=$((SCOPE_COUNT + 1))
+              FIXES+=("$CLEAN_MSG")
             elif [[ $commit_msg =~ ^(refactor|refactoring)(\(.+\))?: ]]; then
-              REFACTORS+=("$commit_msg")
-              SCOPE_COUNT=$((SCOPE_COUNT + 1))
+              REFACTORS+=("$CLEAN_MSG")
             elif [[ $commit_msg =~ ^(docs|documentation)(\(.+\))?: ]]; then
-              DOCS+=("$commit_msg")
-              SCOPE_COUNT=$((SCOPE_COUNT + 1))
-            else
-              OTHERS+=("$commit_msg")
+              DOCS+=("$CLEAN_MSG")
             fi
           done <<< "$COMMITS"
           
-          if [ ${#FEATURES[@]} -gt 0 ]; then
-            echo "#### ✨ Novas Funcionalidades" >> pr_description.md
-            for feat in "${FEATURES[@]}"; do
-              echo "- $feat" >> pr_description.md
+          CONTEXTUAL_SUMMARY=""
+          
+          if [ ${#MAIN_AREAS[@]} -gt 0 ]; then
+            CONTEXTUAL_SUMMARY="Este Pull Request implementa melhorias em "
+            for i in "${!MAIN_AREAS[@]}"; do
+              if [ $i -eq $((${#MAIN_AREAS[@]} - 1)) ] && [ ${#MAIN_AREAS[@]} -gt 1 ]; then
+                CONTEXTUAL_SUMMARY+="e ${MAIN_AREAS[$i]}"
+              elif [ $i -eq 0 ]; then
+                CONTEXTUAL_SUMMARY+="${MAIN_AREAS[$i]}"
+              else
+                CONTEXTUAL_SUMMARY+=", ${MAIN_AREAS[$i]}"
+              fi
             done
-            echo "" >> pr_description.md
+            CONTEXTUAL_SUMMARY+=". "
+          fi
+          
+          if [ ${#SPECIFIC_CHANGES[@]} -gt 0 ]; then
+            CONTEXTUAL_SUMMARY+="Principais mudanças incluem: "
+            for i in "${!SPECIFIC_CHANGES[@]}"; do
+              if [ $i -eq $((${#SPECIFIC_CHANGES[@]} - 1)) ] && [ ${#SPECIFIC_CHANGES[@]} -gt 1 ]; then
+                CONTEXTUAL_SUMMARY+="e ${SPECIFIC_CHANGES[$i]}"
+              elif [ $i -eq 0 ]; then
+                CONTEXTUAL_SUMMARY+="${SPECIFIC_CHANGES[$i]}"
+              else
+                CONTEXTUAL_SUMMARY+=", ${SPECIFIC_CHANGES[$i]}"
+              fi
+            done
+            CONTEXTUAL_SUMMARY+=". "
+          fi
+          
+          if [ ${#FEATURES[@]} -gt 0 ]; then
+            CONTEXTUAL_SUMMARY+="Novas funcionalidades: "
+            for i in "${!FEATURES[@]}"; do
+              if [ $i -lt 3 ]; then
+                if [ $i -gt 0 ]; then
+                  CONTEXTUAL_SUMMARY+=", "
+                fi
+                CONTEXTUAL_SUMMARY+="${FEATURES[$i]}"
+              fi
+            done
+            if [ ${#FEATURES[@]} -gt 3 ]; then
+              CONTEXTUAL_SUMMARY+=" e mais $((${#FEATURES[@]} - 3)) funcionalidade(s)"
+            fi
+            CONTEXTUAL_SUMMARY+=". "
           fi
           
           if [ ${#FIXES[@]} -gt 0 ]; then
-            echo "#### 🐛 Correções" >> pr_description.md
-            for fix in "${FIXES[@]}"; do
-              echo "- $fix" >> pr_description.md
-            done
-            echo "" >> pr_description.md
+            CONTEXTUAL_SUMMARY+="Correções aplicadas em ${#FIXES[@]} ponto(s). "
           fi
           
           if [ ${#REFACTORS[@]} -gt 0 ]; then
-            echo "#### ♻️ Refatorações" >> pr_description.md
-            for ref in "${REFACTORS[@]}"; do
-              echo "- $ref" >> pr_description.md
-            done
-            echo "" >> pr_description.md
+            CONTEXTUAL_SUMMARY+="Refatorações realizadas para melhorar manutenibilidade. "
           fi
           
-          if [ ${#DOCS[@]} -gt 0 ]; then
-            echo "#### 📚 Documentação" >> pr_description.md
-            for doc in "${DOCS[@]}"; do
-              echo "- $doc" >> pr_description.md
-            done
-            echo "" >> pr_description.md
+          TOTAL_COMMITS=$(git rev-list --count ${BASE_SHA}..${HEAD_SHA})
+          TOTAL_FILES=$(echo "$FILES_CHANGED" | wc -l | tr -d ' ')
+          ADDED_LINES=$(echo "$FILES_STATS" | awk '{sum+=$4} END {print sum+0}')
+          REMOVED_LINES=$(echo "$FILES_STATS" | awk '{sum+=$6} END {print sum+0}')
+          
+          if [ $TOTAL_COMMITS -gt 0 ]; then
+            CONTEXTUAL_SUMMARY+="Total: $TOTAL_COMMITS commit(s), $TOTAL_FILES arquivo(s) alterado(s)"
+            if [ "$ADDED_LINES" -gt 0 ] || [ "$REMOVED_LINES" -gt 0 ]; then
+              CONTEXTUAL_SUMMARY+=" (+$ADDED_LINES/-$REMOVED_LINES linhas)"
+            fi
+            CONTEXTUAL_SUMMARY+="."
           fi
           
-          if [ ${#OTHERS[@]} -gt 0 ]; then
-            echo "#### 📝 Outras Mudanças" >> pr_description.md
-            for other in "${OTHERS[@]}"; do
-              echo "- $other" >> pr_description.md
-            done
-            echo "" >> pr_description.md
-          fi
-          
-          echo "### 📊 Estatísticas" >> pr_description.md
-          echo "" >> pr_description.md
-          echo "- **Total de commits**: $(git rev-list --count ${BASE_SHA}..${HEAD_SHA})" >> pr_description.md
-          echo "- **Arquivos alterados**: $(git diff --name-only ${BASE_SHA}..${HEAD_SHA} | wc -l | tr -d ' ')" >> pr_description.md
-          echo "- **Linhas adicionadas**: $(git diff --shortstat ${BASE_SHA}..${HEAD_SHA} | awk '{print $4}')" >> pr_description.md
-          echo "- **Linhas removidas**: $(git diff --shortstat ${BASE_SHA}..${HEAD_SHA} | awk '{print $6}')" >> pr_description.md
-          echo "" >> pr_description.md
-          
-          echo "### 🔗 Commits Incluídos" >> pr_description.md
-          echo "" >> pr_description.md
-          git log --format="- %s (%h)" ${BASE_SHA}..${HEAD_SHA} >> pr_description.md
-          
-          DESCRIPTION=$(cat pr_description.md)
-          echo "description<<EOF" >> $GITHUB_OUTPUT
-          echo "$DESCRIPTION" >> $GITHUB_OUTPUT
+          echo "$CONTEXTUAL_SUMMARY" > contextual_summary.txt
+          echo "summary<<EOF" >> $GITHUB_OUTPUT
+          echo "$CONTEXTUAL_SUMMARY" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Update PR Description
+      - name: Update PR Description with Summary
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
-            const description = fs.readFileSync('pr_description.md', 'utf8');
+            const summary = fs.readFileSync('contextual_summary.txt', 'utf8').trim();
+            
+            const currentBody = context.payload.pull_request.body || '';
+            
+            let newBody = currentBody;
+            
+            const resumoRegex = /(##\s*[Rr]esumo\s*\n\n?)(.*?)(?=\n##|\n*$)/s;
+            
+            if (currentBody.match(resumoRegex)) {
+              newBody = currentBody.replace(
+                resumoRegex,
+                `$1${summary}\n\n`
+              );
+            } else if (currentBody.includes('## Resumo') || currentBody.includes('## resumo')) {
+              newBody = currentBody.replace(
+                /(##\s*[Rr]esumo\s*\n)/,
+                `$1${summary}\n\n`
+              );
+            } else if (currentBody.trim() === '' || !currentBody.includes('##')) {
+              newBody = `## Resumo\n\n${summary}\n\n${currentBody}`;
+            } else {
+              const firstSectionMatch = currentBody.match(/^(.*?)(##\s*[Mm]otivação|##\s*[Tt]este|##\s*[Cc]hecklist|$)/s);
+              if (firstSectionMatch) {
+                newBody = `${firstSectionMatch[1]}## Resumo\n\n${summary}\n\n${firstSectionMatch[2]}`;
+              } else {
+                newBody = `## Resumo\n\n${summary}\n\n---\n\n${currentBody}`;
+              }
+            }
             
             await github.rest.pulls.update({
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: context.issue.number,
-              body: description
+              body: newBody
             });
-
