@@ -10,9 +10,9 @@ bronze_tables:
       schema: SALES
       table: CUSTOMERS
     ingestion:
-      mode: incremental
+      mode: snapshot_full  # Conforme AGENTS.md: snapshot diário D-1
+      reference_date: D-1  # Data de referência do snapshot (não data de carga)
       partition_column: ID
-      incremental_column: UPDATED_AT
       num_partitions: 10
       fetch_size: 10000
     quality:
@@ -30,9 +30,9 @@ bronze_tables:
       schema: SALES
       table: ORDERS
     ingestion:
-      mode: incremental
+      mode: snapshot_full  # Conforme AGENTS.md
+      reference_date: D-1
       partition_column: ORDER_ID
-      incremental_column: ORDER_DATE
       num_partitions: 20
       fetch_size: 10000
     quality:
@@ -60,7 +60,8 @@ silver_transformations:
           name: string
           email: string
           created_at: timestamp
-    partition_by: [created_date]
+    # Camada silver deve particionar por data de referência do snapshot
+    partition_by: [reference_date]
 
 gold_metrics:
   daily_sales_summary:

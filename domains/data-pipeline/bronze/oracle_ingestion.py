@@ -2,7 +2,7 @@
 Pipeline de ingestão de dados do Oracle para camada Bronze
 Domínio: data-pipeline
 """
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, List
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import current_timestamp, lit
@@ -29,8 +29,7 @@ class OracleBronzeIngestion:
         schema: Optional[str] = None,
         partition_column: Optional[str] = None,
         num_partitions: int = 10,
-        incremental_column: Optional[str] = None,
-        last_value: Optional[str] = None
+        reference_date: Optional[str] = None,
     ) -> DataFrame:
         """
         Ingere tabela do Oracle
@@ -54,17 +53,15 @@ class OracleBronzeIngestion:
                 num_partitions=num_partitions
             )
 
-            # Filtro incremental
-            if incremental_column and last_value:
-                self.logger.info(
-                    f"Aplicando filtro incremental: {incremental_column} > {last_value}"
-                )
-                df = df.filter(f"{incremental_column} > '{last_value}'")
+            # Define reference_date (D-1 por padrão)
+            if reference_date is None:
+                ref = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+            else:
+                ref = reference_date
 
             # Adiciona metadados de ingestão
             df = df.withColumn("_ingestion_timestamp", current_timestamp())
-            df = df.withColumn("_ingestion_date", 
-                             lit(datetime.now().strftime("%Y-%m-%d")))
+            df = df.withColumn("reference_date", lit(ref))
             df = df.withColumn("_source", lit("oracle"))
             df = df.withColumn("_source_table", 
                              lit(f"{schema}.{table}" if schema else table))
@@ -78,7 +75,7 @@ class OracleBronzeIngestion:
                 df=df,
                 source="oracle",
                 entity=table.lower(),
-                partition_by=["_ingestion_date"],
+                partition_by=["reference_date"],
                 mode="append"
             )
 
