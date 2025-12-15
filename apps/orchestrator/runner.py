@@ -5,7 +5,6 @@ Dispara pipelines entre domínios e camadas
 import argparse
 import yaml
 from pathlib import Path
-import importlib.util
 from typing import List, Dict, Optional
 from datetime import datetime
 import sys
@@ -44,22 +43,11 @@ class PipelineOrchestrator:
         self.logger.info(f"=" * 60)
 
         try:
-            # Importa runner por caminho para suportar diretórios com '-'
-            runner_path = Path("domains") / domain / layer / "runner.py"
-            if not runner_path.exists():
-                raise FileNotFoundError(f"Runner não encontrado: {runner_path}")
-
-            spec = importlib.util.spec_from_file_location(
-                f"{domain}_{layer}_runner", str(runner_path)
-            )
-            if spec is None or spec.loader is None:
-                raise ImportError(f"Falha ao criar spec para {runner_path}")
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+            # Importa dinamicamente o runner do domínio
+            domain_module = f"domains.{domain.replace('-', '_')}.{layer}.runner"
+            module = __import__(domain_module, fromlist=['run'])
 
             # Executa
-            if not hasattr(module, "run"):
-                raise AttributeError(f"Runner {runner_path} não expõe função run()")
             module.run()
 
             self.logger.info(f"✓ {domain}/{layer} concluído com sucesso")
