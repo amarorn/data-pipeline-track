@@ -1,8 +1,14 @@
 """
 Track Platform - Utilities compartilhadas
 """
-from .hash import add_row_hash
+from .schema_validator import validate_schema
+from .config_parser import parse_config
+from .incremental import get_incremental_value
+from .naming import format_table_name
 
 __all__ = [
-    "add_row_hash",
+    "validate_schema",
+    "parse_config",
+    "get_incremental_value",
+    "format_table_name",
 ]
