@@ -26,6 +26,18 @@ def validate_table_config(config: Dict, domain_path: Path) -> List[str]:
             if 'type' not in table['source']:
                 errors.append(f"Tabela {table['name']}: source.type obrigatório")
 
+        # Proíbe incremental no domínio data-pipeline
+        if table.get('ingestion', {}).get('mode') != 'snapshot_full':
+            errors.append(
+                f"Tabela {table.get('name','unknown')}: ingestion.mode deve ser 'snapshot_full'"
+            )
+
+        # Exige reference_date no domínio data-pipeline
+        if 'reference_date' not in table.get('ingestion', {}):
+            errors.append(
+                f"Tabela {table.get('name','unknown')}: ingestion.reference_date obrigatório"
+            )
+
         # Valida metadata
         if 'metadata' in table:
             if 'owner' not in table['metadata']:
