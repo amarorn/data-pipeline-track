@@ -1,5 +1,3 @@
-version: "3.9"
-
 # ============================================
 # Track Data Platform - Docker Compose
 # Infra de desenvolvimento: Jupyter + Spark client + Airflow
@@ -14,8 +12,7 @@ services:
       context: .
       dockerfile: platform/infra/docker/Dockerfile.jupyter
     container_name: track-jupyter
-    ports:
-      - "9999:8888"
+    network_mode: host
     env_file:
       - .env
     volumes:
@@ -23,12 +20,43 @@ services:
       - ./platform/shared-libs:/app/platform/shared-libs
       - ./domains:/app/domains
       - ./temp:/app/temp
-    networks:
-      - track-network
+      - ./config:/app/config
+      - ./connectors:/app/connectors
+      - ./apps:/app/apps
     restart: unless-stopped
     environment:
       JUPYTER_ENABLE_LAB: "yes"
-      SPARK_MASTER: "spark://spark-master:7077"
+      SPARK_MASTER: "spark://localhost:7077"
+
+  oracle-tunnel:
+    image: alpine/ssh-client:latest
+    container_name: oracle-tunnel
+    network_mode: host
+    env_file:
+      - .env
+    command: >
+      sh -c "
+        if [ -z \"$$SSH_GATEWAY\" ] || [ -z \"$$SSH_USER\" ]; then
+          echo '⚠ Túnel SSH não configurado. Configure SSH_GATEWAY e SSH_USER no .env';
+          echo '⚠ Continuando sem túnel...';
+          sleep infinity;
+        else
+          echo 'Iniciando túnel SSH para Oracle...';
+          ssh -o StrictHostKeyChecking=no
+              -o ServerAliveInterval=60
+              -o ServerAliveCountMax=3
+              -L $${LOCAL_PORT:-1521}:$${ORACLE_HOST:-10.255.150.11}:$${ORACLE_PORT:-1521}
+              -N
+              -f
+              $${SSH_KEY:+-i $$SSH_KEY}
+              $${SSH_USER}@$${SSH_GATEWAY};
+          echo '✓ Túnel SSH ativo';
+          sleep infinity;
+        fi
+      "
+    restart: unless-stopped
+    profiles:
+      - tunnel
 
   # ============================================
   # Spark Cluster
@@ -77,19 +105,48 @@ services:
     networks:
       - track-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   # ============================================
   # Airflow Webserver
   # ============================================
+  airflow-init:
+    image: apache/airflow:2.9.3
+    container_name: airflow-init
+    depends_on:
+      airflow-db:
+        condition: service_healthy
+    environment:
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-db:5432/airflow
+      AIRFLOW__CORE__FERNET_KEY: "2KWYd3PNFRnLbi-KiOmn5uXlB0w3iSB61Cv0UUy5lds="
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW_UID: "50000"
+    command: ["db", "init"]
+    user: "50000:0"
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+    networks:
+      - track-network
+
   airflow-webserver:
     image: apache/airflow:2.9.3
     container_name: airflow-webserver
     depends_on:
-      - airflow-db
+      airflow-db:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-db:5432/airflow
-      AIRFLOW__CORE__FERNET_KEY: "a2FjaGUtZGV2LWs="
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-db:5432/airflow
+      AIRFLOW__CORE__FERNET_KEY: "2KWYd3PNFRnLbi-KiOmn5uXlB0w3iSB61Cv0UUy5lds="
       AIRFLOW__WEBSERVER__RBAC: "True"
       AIRFLOW__CORE__LOAD_EXAMPLES: "False"
       AIRFLOW_UID: "50000"
@@ -99,6 +156,11 @@ services:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
       - ./airflow/plugins:/opt/airflow/plugins
+      - ./apps:/app/apps
+      - ./config:/app/config
+      - ./connectors:/app/connectors
+      - ./platform/shared-libs:/app/platform/shared-libs
+      - ./.env:/app/.env:ro
     ports:
       - "8080:8080"
     networks:
@@ -112,11 +174,14 @@ services:
     image: apache/airflow:2.9.3
     container_name: airflow-scheduler
     depends_on:
-      - airflow-db
+      airflow-db:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
     environment:
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
-      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-db:5432/airflow
-      AIRFLOW__CORE__FERNET_KEY: "a2FjaGUtZGV2LWs="
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-db:5432/airflow
+      AIRFLOW__CORE__FERNET_KEY: "2KWYd3PNFRnLbi-KiOmn5uXlB0w3iSB61Cv0UUy5lds="
       AIRFLOW__CORE__LOAD_EXAMPLES: "False"
       AIRFLOW_UID: "50000"
     command: ["scheduler"]
@@ -125,6 +190,11 @@ services:
       - ./airflow/dags:/opt/airflow/dags
       - ./airflow/logs:/opt/airflow/logs
       - ./airflow/plugins:/opt/airflow/plugins
+      - ./apps:/app/apps
+      - ./config:/app/config
+      - ./connectors:/app/connectors
+      - ./platform/shared-libs:/app/platform/shared-libs
+      - ./.env:/app/.env:ro
     networks:
       - track-network
     restart: unless-stopped
@@ -133,3 +203,6 @@ networks:
   track-network:
     driver: bridge
     name: track-platform-network
+    driver_opts:
+      com.docker.network.bridge.enable_icc: "true"
+      com.docker.network.bridge.enable_ip_masquerade: "true"
