@@ -1,134 +1,120 @@
-"""
-Track Platform - Orquestrador Central de Pipelines
-Dispara pipelines entre domínios e camadas
-"""
+from __future__ import annotations
+
 import argparse
-import yaml
-from pathlib import Path
 import importlib.util
-from typing import List, Dict, Optional
 from datetime import datetime
-import sys
+from pathlib import Path
+from typing import Dict, List, Optional
+
+import yaml
 
 from track_platform.logging import setup_logger
 
 
 class PipelineOrchestrator:
-    """Orquestra execução de pipelines entre domínios"""
-
     def __init__(self, config_path: Optional[Path] = None):
-        self.logger = setup_logger(
-            "Orchestrator",
-            log_file=Path("logs") / f"orchestrator_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
-        )
+        self.logger = setup_logger("orchestrator")
         self.config = self._load_config(config_path)
 
     def _load_config(self, config_path: Optional[Path]) -> Dict:
-        """Carrega configuração de orquestração"""
-        if config_path is None:
-            config_path = Path(__file__).parent / "configs" / "pipelines.yaml"
+        path = config_path or Path(__file__).parent / "configs" / "pipelines.yaml"
+        if not path.exists():
+            raise FileNotFoundError(f"Configuração não encontrada em {path}")
+        config = yaml.safe_load(path.read_text())
+        if not config or "domains" not in config:
+            raise ValueError("Configuração de domínios inválida")
+        return config
 
-        with open(config_path, 'r') as f:
-            return yaml.safe_load(f)
+    def _resolve_domain(self, domain_name: str) -> Dict:
+        domains = self.config.get("domains", [])
+        for domain_config in domains:
+            if domain_config.get("name") == domain_name:
+                return domain_config
+        raise ValueError(f"Domínio {domain_name} não configurado")
 
-    def run_domain_pipeline(self, domain: str, layer: str):
-        """
-        Executa pipeline de um domínio específico
-
-        Args:
-            domain: Nome do domínio (ex: data-pipeline)
-            layer: Camada (bronze, silver, gold)
-        """
-        self.logger.info(f"=" * 60)
-        self.logger.info(f"Executando: {domain} - {layer}")
-        self.logger.info(f"=" * 60)
-
-        try:
-            # Importa runner por caminho para suportar diretórios com '-'
-            runner_path = Path("domains") / domain / layer / "runner.py"
-            if not runner_path.exists():
-                raise FileNotFoundError(f"Runner não encontrado: {runner_path}")
-
-            spec = importlib.util.spec_from_file_location(
-                f"{domain}_{layer}_runner", str(runner_path)
+    def _resolve_layers(self, domain_config: Dict, target_layer: Optional[str]) -> List[str]:
+        layers = domain_config.get("layers", [])
+        if not layers:
+            raise ValueError(f"Domínio {domain_config.get('name')} sem camadas configuradas")
+        if target_layer is None or target_layer == "all":
+            return layers
+        if target_layer not in layers:
+            raise ValueError(
+                f"Camada {target_layer} não configurada para {domain_config.get('name')}"
             )
-            if spec is None or spec.loader is None:
-                raise ImportError(f"Falha ao criar spec para {runner_path}")
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+        return [target_layer]
 
-            # Executa
-            if not hasattr(module, "run"):
-                raise AttributeError(f"Runner {runner_path} não expõe função run()")
-            module.run()
+    def _execute_runner(self, domain_name: str, layer_name: str) -> None:
+        runner_path = Path("domains") / domain_name / layer_name / "runner.py"
+        if not runner_path.exists():
+            raise FileNotFoundError(f"Runner inexistente em {runner_path}")
+        spec = importlib.util.spec_from_file_location(
+            f"{domain_name}_{layer_name}_runner", str(runner_path)
+        )
+        if spec is None or spec.loader is None:
+            raise ImportError(f"Não foi possível carregar {runner_path}")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        run_callable = getattr(module, "run", None)
+        if run_callable is None:
+            raise AttributeError(f"Runner {runner_path} sem função run")
+        run_callable()
 
-            self.logger.info(f"✓ {domain}/{layer} concluído com sucesso")
+    def run_domain(self, domain_name: str, layer: Optional[str] = None) -> None:
+        domain_config = self._resolve_domain(domain_name)
+        if not domain_config.get("enabled", False):
+            self.logger.info(f"Domínio {domain_name} desabilitado")
+            return
+        layers = self._resolve_layers(domain_config, layer)
+        for layer_name in layers:
+            start_time = datetime.now()
+            self.logger.info(f"Início {domain_name}/{layer_name}")
+            try:
+                self._execute_runner(domain_name, layer_name)
+                duration = (datetime.now() - start_time).total_seconds()
+                self.logger.info(f"Conclusão {domain_name}/{layer_name} em {duration:.2f}s")
+            except Exception as exc:
+                self.logger.error(f"Falha em {domain_name}/{layer_name}: {exc}")
+                if domain_config.get("fail_fast", False):
+                    raise
 
-        except Exception as e:
-            self.logger.error(f"✗ Erro em {domain}/{layer}: {str(e)}")
-            raise
-
-    def run_all_domains(self, layer: Optional[str] = None):
-        """
-        Executa todos os domínios configurados
-
-        Args:
-            layer: Se especificado, executa apenas essa camada
-        """
+    def run_all_domains(self, layer: Optional[str] = None) -> None:
         start_time = datetime.now()
-
-        domains = self.config.get('domains', [])
-        layers = [layer] if layer else ['bronze', 'silver', 'gold']
-
-        for domain in domains:
-            for layer_name in layers:
-                try:
-                    self.run_domain_pipeline(domain['name'], layer_name)
-                except Exception as e:
-                    if domain.get('fail_fast', False):
-                        raise
-                    continue
-
+        for domain_config in self.config.get("domains", []):
+            domain_name = domain_config.get("name")
+            if domain_name is None:
+                continue
+            try:
+                self.run_domain(domain_name, layer)
+            except Exception as exc:
+                self.logger.error(f"Domínio {domain_name} interrompido: {exc}")
+                if domain_config.get("fail_fast", False):
+                    raise
         duration = (datetime.now() - start_time).total_seconds()
-        self.logger.info(f"Pipeline completo executado em {duration:.2f}s")
+        self.logger.info(f"Execução completa em {duration:.2f}s")
 
 
-def main():
-    """Ponto de entrada CLI"""
-    parser = argparse.ArgumentParser(
-        description="Track Platform - Orquestrador de Pipelines"
-    )
-    parser.add_argument(
-        "--domain",
-        type=str,
-        help="Domínio específico (ex: data-pipeline)"
-    )
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Track Platform Orchestrator")
+    parser.add_argument("--domain", type=str, help="Domínio alvo")
     parser.add_argument(
         "--layer",
         type=str,
-        choices=['bronze', 'silver', 'gold', 'all'],
-        default='all',
-        help="Camada a executar"
+        choices=["bronze", "silver", "gold", "all"],
+        default="all",
     )
-    parser.add_argument(
-        "--config",
-        type=str,
-        help="Caminho para arquivo de configuração customizado"
-    )
+    parser.add_argument("--config", type=str, help="Caminho para configuração")
+    return parser.parse_args()
 
-    args = parser.parse_args()
 
-    # Cria orquestrador
-    config_path = Path(args.config) if args.config else None
-    orchestrator = PipelineOrchestrator(config_path=config_path)
-
-    # Executa
+def main() -> None:
+    args = parse_args()
+    orchestrator = PipelineOrchestrator(config_path=Path(args.config) if args.config else None)
+    target_layer = args.layer if args.layer != "all" else None
     if args.domain:
-        layer = args.layer if args.layer != 'all' else None
-        orchestrator.run_domain_pipeline(args.domain, layer or 'bronze')
+        orchestrator.run_domain(args.domain, target_layer)
     else:
-        layer = args.layer if args.layer != 'all' else None
-        orchestrator.run_all_domains(layer=layer)
+        orchestrator.run_all_domains(target_layer)
 
 
 if __name__ == "__main__":
