@@ -4,17 +4,14 @@ from config.settings import clickhouse_config
 
 class ClickHouseClient:
     def __init__(self):
-        client_params = {
-            "host": clickhouse_config.host,
-            "port": clickhouse_config.port,
-            "username": clickhouse_config.user,
-            "password": clickhouse_config.password,
-            "database": clickhouse_config.database,
-            "secure": clickhouse_config.secure
-        }
-        if clickhouse_config.secure:
-            client_params["verify"] = clickhouse_config.verify
-        self.client = clickhouse_connect.get_client(**client_params)
+        self.client = clickhouse_connect.get_client(
+            host=clickhouse_config.host,
+            port=clickhouse_config.port,
+            username=clickhouse_config.user,
+            password=clickhouse_config.password,
+            database=clickhouse_config.database,
+            secure=clickhouse_config.secure
+        )
 
     def execute_query(self, query: str):
         return self.client.command(query)
