@@ -53,9 +53,11 @@ Ambas as opções usam as mesmas variáveis do `.env`:
 SSH_GATEWAY=seu-gateway.com      # Servidor intermediário (jump host)
 SSH_USER=amaro.neto.beanalytic   # Usuário SSH
 SSH_KEY=/path/to/key.pem         # Opcional: chave SSH
+SSH_PASSWORD=sua_senha           # Opcional: senha SSH (não recomendado)
 LOCAL_PORT=1521                   # Porta local (padrão: 1521)
 ORACLE_HOST=10.255.150.11        # IP do Oracle (remoto)
 ORACLE_PORT=1521                 # Porta do Oracle
+ORACLE_TUNNEL_HOST=10.255.150.11 # Host remoto do Oracle usado pelo túnel
 ```
 
 ## Após Criar o Túnel

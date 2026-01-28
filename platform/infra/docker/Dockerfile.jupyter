@@ -8,6 +8,9 @@ RUN apt-get update && apt-get install -y \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
+# Força Python 3.11 para compatibilidade com pydantic-core
+RUN conda install -y python=3.11 && conda clean -a -y
+
 # Baixa JARs necessários
 RUN cd $SPARK_HOME/jars && \
     wget -q https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar && \

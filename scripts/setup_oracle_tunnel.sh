@@ -10,11 +10,14 @@ if [ -f "$ENV_FILE" ]; then
     export $(grep -v '^#' "$ENV_FILE" | grep -v '^$' | xargs)
 fi
 
-ORACLE_HOST="${ORACLE_HOST:-10.255.150.11}"
+ORACLE_HOST="${ORACLE_HOST:-}"
 ORACLE_PORT="${ORACLE_PORT:-1521}"
+ORACLE_TUNNEL_HOST="${ORACLE_TUNNEL_HOST:-${ORACLE_HOST:-10.255.150.11}}"
+ORACLE_TUNNEL_PORT="${ORACLE_TUNNEL_PORT:-${ORACLE_PORT:-1521}}"
 SSH_GATEWAY="${SSH_GATEWAY:-}"
 SSH_USER="${SSH_USER:-}"
 SSH_KEY="${SSH_KEY:-}"
+SSH_PASSWORD="${SSH_PASSWORD:-}"
 
 if [ -z "$SSH_GATEWAY" ]; then
     echo "⚠ Variáveis de ambiente não configuradas para túnel SSH"
@@ -26,18 +29,18 @@ if [ -z "$SSH_GATEWAY" ]; then
     echo ""
     echo "IMPORTANTE:"
     echo "  - SSH_GATEWAY deve ser um servidor intermediário, NÃO o IP do Oracle"
-    echo "  - O gateway deve ter acesso ao Oracle em ${ORACLE_HOST}:${ORACLE_PORT}"
+    echo "  - O gateway deve ter acesso ao Oracle em ${ORACLE_TUNNEL_HOST}:${ORACLE_TUNNEL_PORT}"
     echo ""
     echo "Ou execute manualmente:"
-    echo "  ssh -L 1521:${ORACLE_HOST}:${ORACLE_PORT} -N usuario@gateway.example.com"
+    echo "  ssh -L 1521:${ORACLE_TUNNEL_HOST}:${ORACLE_TUNNEL_PORT} -N usuario@gateway.example.com"
     exit 1
 fi
 
-if [ "$SSH_GATEWAY" = "$ORACLE_HOST" ]; then
+if [ "$SSH_GATEWAY" = "$ORACLE_TUNNEL_HOST" ]; then
     echo "⚠ ATENÇÃO: SSH_GATEWAY está configurado com o mesmo IP do Oracle"
     echo "  Isso geralmente está incorreto."
     echo "  SSH_GATEWAY deve ser um servidor intermediário (jump host/gateway)"
-    echo "  que tem acesso ao Oracle em ${ORACLE_HOST}:${ORACLE_PORT}"
+    echo "  que tem acesso ao Oracle em ${ORACLE_TUNNEL_HOST}:${ORACLE_TUNNEL_PORT}"
     echo ""
     read -p "Deseja continuar mesmo assim? (s/N): " -n 1 -r
     echo
@@ -47,8 +50,8 @@ if [ "$SSH_GATEWAY" = "$ORACLE_HOST" ]; then
 fi
 
 LOCAL_PORT="${LOCAL_PORT:-1521}"
-REMOTE_HOST="${ORACLE_HOST}"
-REMOTE_PORT="${ORACLE_PORT}"
+REMOTE_HOST="${ORACLE_TUNNEL_HOST}"
+REMOTE_PORT="${ORACLE_TUNNEL_PORT}"
 
 echo "=================================================================================="
 echo "CONFIGURANDO TÚNEL SSH PARA ORACLE"
@@ -59,11 +62,22 @@ echo "Porta local: ${LOCAL_PORT}"
 echo "=================================================================================="
 echo ""
 
-if [ -f "$SSH_KEY" ]; then
-    SSH_OPTS="-i $SSH_KEY"
+SSH_PREFIX="ssh"
+SSH_OPTS=""
+if [ -n "$SSH_PASSWORD" ]; then
+    if command -v sshpass >/dev/null 2>&1; then
+        SSH_PREFIX="sshpass -p $SSH_PASSWORD ssh"
+        SSH_OPTS="-o PreferredAuthentications=password -o PasswordAuthentication=yes"
+        echo "✓ Usando senha SSH (SSH_PASSWORD)"
+    else
+        echo "✗ SSH_PASSWORD definido, mas sshpass não está instalado."
+        echo "  Instale sshpass ou use SSH_KEY."
+        exit 1
+    fi
+elif [ -f "$SSH_KEY" ]; then
+    SSH_OPTS="-i $SSH_KEY -o PasswordAuthentication=no -o PreferredAuthentications=publickey -o PubkeyAuthentication=yes"
     echo "✓ Usando chave SSH: $SSH_KEY"
 else
-    SSH_OPTS=""
     echo "⚠ Usando autenticação padrão SSH"
 fi
 
@@ -82,10 +96,10 @@ if lsof -Pi :${LOCAL_PORT} -sTCP:LISTEN -t >/dev/null 2>&1 ; then
 fi
 
 echo "Iniciando túnel SSH..."
-echo "Comando: ssh -o StrictHostKeyChecking=no -o ServerAliveInterval=60 -o ServerAliveCountMax=3 -L ${LOCAL_PORT}:${REMOTE_HOST}:${REMOTE_PORT} -N -f ${SSH_OPTS} ${SSH_USER}@${SSH_GATEWAY}"
+echo "Comando: ${SSH_PREFIX} -o StrictHostKeyChecking=no -o ServerAliveInterval=60 -o ServerAliveCountMax=3 -L ${LOCAL_PORT}:${REMOTE_HOST}:${REMOTE_PORT} -N -f ${SSH_OPTS} ${SSH_USER}@${SSH_GATEWAY}"
 echo ""
 
-ssh -o StrictHostKeyChecking=no \
+${SSH_PREFIX} -o StrictHostKeyChecking=no \
     -o ServerAliveInterval=60 \
     -o ServerAliveCountMax=3 \
     -L ${LOCAL_PORT}:${REMOTE_HOST}:${REMOTE_PORT} \
@@ -111,4 +125,3 @@ else
     echo "✗ Erro ao criar túnel SSH"
     exit 1
 fi
-

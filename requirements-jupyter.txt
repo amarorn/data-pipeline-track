@@ -11,6 +11,10 @@ jupyterlab
 # Inclui requirements principais
 -r requirements.txt
 
+# Pydantic (Python 3.13 compatible)
+pydantic==2.12.5
+pydantic-settings==2.12.0
+
 # Jupyter
 jupyter==1.0.0
 jupyterlab==4.0.6
