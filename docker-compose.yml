@@ -12,11 +12,11 @@ services:
       context: .
       dockerfile: platform/infra/docker/Dockerfile.jupyter
     container_name: track-jupyter
-    network_mode: host
     env_file:
       - .env
     volumes:
       - ./notebooks:/app/notebooks
+      - /u01/track-data-platform
       - ./platform/shared-libs:/app/platform/shared-libs
       - ./domains:/app/domains
       - ./temp:/app/temp:ro
@@ -25,10 +25,17 @@ services:
       - ./apps:/app/apps
       - ./spark/event-logs:/opt/bitnami/spark/event-logs
       - ./platform/infra/docker/spark-defaults.conf:/usr/local/spark/conf/spark-defaults.conf:ro
+    extra_hosts:
+      - "etbdb002:host-gateway"
+    ports:
+      - "8889:8889"
+    networks:
+      - track-network
     restart: unless-stopped
     environment:
       JUPYTER_ENABLE_LAB: "yes"
-      SPARK_MASTER: "spark://localhost:7077"
+      SPARK_MASTER: "spark://spark-master:7077"
+      JAVA_HOME: "/usr/lib/jvm/java-17-openjdk-amd64"
 
   oracle-tunnel:
     image: alpine:latest
