@@ -50,7 +50,7 @@ env/
 notebooks/.ipynb_checkpoints/
 
 # Environment & Secrets
-.env
+#.env
 .env.local
 .env.*.local
 *.pem

@@ -19,7 +19,7 @@ services:
       - ./notebooks:/app/notebooks
       - ./platform/shared-libs:/app/platform/shared-libs
       - ./domains:/app/domains
-      - ./temp:/app/temp
+      - ./temp:/app/temp:ro
       - ./config:/app/config
       - ./connectors:/app/connectors
       - ./apps:/app/apps
