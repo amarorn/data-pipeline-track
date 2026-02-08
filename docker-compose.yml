@@ -28,7 +28,7 @@ services:
     extra_hosts:
       - "etbdb002:host-gateway"
     ports:
-      - "8889:8889"
+      - "8889:8888"
     networks:
       - track-network
     restart: unless-stopped
