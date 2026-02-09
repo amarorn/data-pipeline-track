@@ -1,4 +1,68 @@
-# Como Executar o Pipeline de Extração Oracle → ClickHouse
+# Como Executar o Pipeline Oracle → ClickHouse
+
+## Pipeline Snapshot + Hash + Delta (Ingestão + Tratamento + Deltas)
+
+Fluxo completo alinhado aos notebooks testados no ClickHouse: **Oracle → Bronze → Silver → Gold** (track_bronze, track_silver, track_gold).
+
+### Configuração
+
+- **Tabelas e PKs:** `apps/orchestrator/configs/snapshot_pipeline.yaml`
+- **Variáveis de ambiente:** `.env` com `ORACLE_*`, `CLICKHOUSE_*`, `SPARK_*`. Opcional: `REF_DATE=YYYY-MM-DD`.
+
+### Execução por camada ou completo
+
+Na raiz do projeto (ou com `PYTHONPATH` apontando para a raiz):
+
+```bash
+# Todas as camadas (Bronze + Silver + Gold)
+python apps/orchestrator/snapshot_hash_delta_pipeline.py --layer all
+
+# Apenas ingestão (Oracle → Bronze)
+python apps/orchestrator/snapshot_hash_delta_pipeline.py --layer bronze
+
+# Apenas Silver (normalização + hash)
+python apps/orchestrator/snapshot_hash_delta_pipeline.py --layer silver
+
+# Apenas Gold (deltas D-1 vs D-2)
+python apps/orchestrator/snapshot_hash_delta_pipeline.py --layer gold
+```
+
+### Opções adicionais
+
+```bash
+# Data de referência (default: hoje ou REF_DATE)
+python apps/orchestrator/snapshot_hash_delta_pipeline.py --layer all --ref-date 2026-02-07
+
+# Uma tabela (pipeline_name do YAML)
+python apps/orchestrator/snapshot_hash_delta_pipeline.py --layer all --table SF2030
+
+# Config customizado
+python apps/orchestrator/snapshot_hash_delta_pipeline.py --config /path/to/snapshot_pipeline.yaml --layer bronze
+```
+
+### Agendamento (cron)
+
+Exemplo para rodar Bronze às 02:00, Silver às 04:00 e Gold às 06:00 (conforme `apps/orchestrator/configs/pipelines.yaml`):
+
+```bash
+0 2 * * * cd /path/to/track-data-platform && REF_DATE=$(date +\%Y-\%m-\%d) python apps/orchestrator/snapshot_hash_delta_pipeline.py --layer bronze
+0 4 * * * cd /path/to/track-data-platform && REF_DATE=$(date +\%Y-\%m-\%d) python apps/orchestrator/snapshot_hash_delta_pipeline.py --layer silver
+0 6 * * * cd /path/to/track-data-platform && REF_DATE=$(date +\%Y-\%m-\%d) python apps/orchestrator/snapshot_hash_delta_pipeline.py --layer gold
+```
+
+### Orquestrador (runner por camada)
+
+Se o domínio for importável como `domains.data_pipeline` (pasta `domains/data_pipeline` com underscore), é possível usar o orquestrador central:
+
+```bash
+python apps/orchestrator/runner.py --domain data-pipeline --layer bronze
+python apps/orchestrator/runner.py --domain data-pipeline --layer silver
+python apps/orchestrator/runner.py --domain data-pipeline --layer gold
+```
+
+Caso a pasta seja `domains/data-pipeline` (com hífen), renomeie para `data_pipeline` ou ajuste o `PYTHONPATH` para que o import funcione.
+
+---
 
 ## Opção 1: Via Notebook Jupyter (Recomendado)
 

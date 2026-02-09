@@ -66,9 +66,8 @@
 # %%
 import numpy as np
 print(f"NumPy: {np.__version__}")
-# Deve mostrar 1.x.x
 # %% [markdown]
-# ## 2. Criar Spark Session (COM Arrow desabilitado)
+# ## 2. Criar Spark Session
 # %%
 from pyspark.sql import SparkSession
 
@@ -88,14 +87,10 @@ print("Spark Session criada (Arrow desabilitado)")
 # %% [markdown]
 # ## 3. Configurar Oracle
 # %%
-import socket
-
 oracle_host = "10.255.150.11"
 oracle_port = 1521
 oracle_user = "clickhouse"
 oracle_password = "qiU!EOoe"
-
-# Service name correto descoberto via: SELECT value FROM v$parameter WHERE name='service_names';
 oracle_service = "CDBQA_grupotracker.grupotracker.com.br"
 jdbc_url = f"jdbc:oracle:thin:@//{oracle_host}:{oracle_port}/{oracle_service}"
 
@@ -116,7 +111,7 @@ df_test = (
 df_test.show()
 print("[OK] Oracle funcionando")
 # %% [markdown]
-# ## 5. Definir Tabelas
+# ## 4. Definir Tabelas
 # %%
 tables_to_extract = [
     "ginf.depara_cliente",
@@ -136,45 +131,42 @@ print(f"Total: {len(tables_to_extract)} tabelas")
 for t in tables_to_extract:
     print(f"  - {t}")
 # %% [markdown]
-# ## 6. Executar Migracao
+# ## 5. Executar Migracao
 # %%
 import clickhouse_connect
 import pandas as pd
 from datetime import datetime
 
-# Conectar ClickHouse
 client = clickhouse_connect.get_client(
     host="e1a1lieug8.us-central1.gcp.clickhouse.cloud",
     port=8443,
     username="default",
     password="_uv765EvWphL_",
-    database="default",
+    database="raw",
     secure=False,
     connect_timeout=60,
     send_receive_timeout=300
 )
 print("ClickHouse: OK\n")
 
-# Definir mapeamento tabelas
 ch_tables = {
-    "depara_cliente": "ginf.depara_cliente",
-    "base_cep_completa": "ginf.BASE_CEP_COMPLETA",
-    "bistage": "bistage.TST_CONTRATOS_BI",
-    "sc5030": "siga.SC5030",
-    "sc6030": "siga.SC6030",
-    "tst_historico_solicitacoes": "ginf.TST_HISTORICO_SOLICITACOES",
-    "tst_solicit_cadastradas": "ginf.TST_SOLICIT_CADASTRADAS",
-    "sd2030": "siga.SD2030",
-    "sf2030": "siga.SF2030",
-    "ztx030": "siga.ZTX030",
-    "tst_contratos": "ginf.TST_CONTRATOS"
+    "ginf_depara_cliente": "ginf.depara_cliente",
+    "ginf_base_cep_completa": "ginf.BASE_CEP_COMPLETA",
+    "bistage_tst_contratos_bi": "bistage.TST_CONTRATOS_BI",
+    "siga_sc5030": "siga.SC5030",
+    "siga_sc6030": "siga.SC6030",
+    "ginf_tst_historico_solicitacoes": "ginf.TST_HISTORICO_SOLICITACOES",
+    "ginf_tst_solicit_cadastradas": "ginf.TST_SOLICIT_CADASTRADAS",
+    "siga_sd2030": "siga.SD2030",
+    "siga_sf2030": "siga.SF2030",
+    "siga_ztx030": "siga.ZTX030",
+    "ginf_tst_contratos": "ginf.TST_CONTRATOS"
 }
 
-# DROPAR tabelas existentes para recriar com schema correto
 print("Dropando tabelas antigas...")
 for ch_tbl in ch_tables.keys():
     try:
-        client.command(f"DROP TABLE IF EXISTS {ch_tbl}")
+        client.command(f"DROP TABLE IF EXISTS raw.{ch_tbl}")
         print(f"  [OK] {ch_tbl} dropada")
     except Exception as e:
         print(f"  [AVISO] {ch_tbl}: {str(e)[:80]}")
@@ -183,7 +175,6 @@ print("\nPronto para migracao")
 print(f"Total: {len(ch_tables)} tabelas")
 print("=" * 60)
 # %%
-# JDBC config
 jdbc_opts = {
     "url": jdbc_url,
     "user": oracle_user,
@@ -191,24 +182,20 @@ jdbc_opts = {
     "driver": "oracle.jdbc.OracleDriver"
 }
 
-# Import para barra de progresso
 from tqdm.notebook import tqdm
 import logging
 import time
 import gc
 
-# Configurar logging
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 logger = logging.getLogger(__name__)
 
-# Constantes
-CHUNK_SIZE = 50000  # Processar 50k linhas por vez
+CHUNK_SIZE = 50000
 MAX_RETRIES = 3
-RETRY_DELAY = 10  # segundos
+RETRY_DELAY = 10
 
-# Funcao para converter tipo Spark -> ClickHouse (SEMPRE Nullable)
+
 def spark_to_ch_type(spark_type):
-    """Converte tipo Spark para tipo ClickHouse"""
     tipo = str(spark_type).lower()
     if 'string' in tipo or 'varchar' in tipo:
         base = 'String'
@@ -229,8 +216,8 @@ def spark_to_ch_type(spark_type):
     
     return f'Nullable({base})'
 
+
 def create_table_if_not_exists(client, ch_tbl, df):
-    """Cria tabela no ClickHouse se nao existir"""
     try:
         client.command(f"SELECT 1 FROM {ch_tbl} LIMIT 1")
         return True
@@ -249,8 +236,8 @@ def create_table_if_not_exists(client, ch_tbl, df):
         client.command(create_sql)
         return False
 
+
 def process_in_chunks(rows, cols, chunk_size=CHUNK_SIZE):
-    """Processa linhas em chunks para economizar memoria"""
     for i in range(0, len(rows), chunk_size):
         chunk_rows = rows[i:i+chunk_size]
         data = []
@@ -267,12 +254,12 @@ def process_in_chunks(rows, cols, chunk_size=CHUNK_SIZE):
             data.append(row_data)
         yield pd.DataFrame(data, columns=cols)
 
+
 def restart_spark_with_delay(current_spark, delay=5):
-    """Reinicia Spark session com delay para liberar recursos"""
     try:
         current_spark.stop()
-        time.sleep(delay)  # Aguardar liberacao de recursos
-        gc.collect()  # Forçar garbage collection
+        time.sleep(delay)
+        gc.collect()
     except:
         pass
     
@@ -290,47 +277,38 @@ def restart_spark_with_delay(current_spark, delay=5):
     )
     return new_spark
 
+
 def migrate_table(current_spark, ch_tbl, oracle_tbl, client, jdbc_opts, pbar):
-    """Migra uma tabela com retry automatico"""
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             t0 = datetime.now()
 
-            # Ler Oracle SEM limite
             df = current_spark.read.format("jdbc") \
                 .options(**jdbc_opts) \
                 .option("dbtable", oracle_tbl) \
                 .load()
 
-            # Criar tabela se nao existir
             create_table_if_not_exists(client, ch_tbl, df)
-
-            # Contar linhas
             row_count = df.count()
             
             if row_count == 0:
                 pbar.write(f"  [{ch_tbl}] AVISO: Tabela vazia")
                 return False, 0, current_spark
 
-            # Coletar todas as linhas
             rows = df.collect()
             cols = df.columns
-            
-            # Processar em chunks
             total_inserted = 0
             for chunk_pdf in process_in_chunks(rows, cols):
                 client.insert_df(ch_tbl, chunk_pdf)
                 total_inserted += len(chunk_pdf)
-            
-            # Limpar memoria
+
             del rows
             del df
             gc.collect()
             
             dur = (datetime.now() - t0).total_seconds()
             pbar.write(f"  [{ch_tbl}] OK: {total_inserted:,} linhas em {dur:.2f}s")
-            
-            # Reiniciar Spark apos tabelas grandes (> 1M linhas)
+
             if total_inserted > 1000000:
                 pbar.write(f"  -> Reiniciando Spark...")
                 current_spark = restart_spark_with_delay(current_spark, delay=5)
@@ -344,8 +322,7 @@ def migrate_table(current_spark, ch_tbl, oracle_tbl, client, jdbc_opts, pbar):
                 pbar.write(f"  [{ch_tbl}] Tentativa {attempt}/{MAX_RETRIES} falhou: {msg}")
                 pbar.write(f"  -> Aguardando {RETRY_DELAY}s antes de tentar novamente...")
                 time.sleep(RETRY_DELAY)
-                
-                # Reiniciar Spark em caso de erro de conexao
+
                 if "ORA-12514" in str(e) or "Connection refused" in str(e):
                     pbar.write(f"  -> Reiniciando Spark...")
                     current_spark = restart_spark_with_delay(current_spark, delay=10)
@@ -368,8 +345,6 @@ fail = 0
 total_rows = 0
 failed = []
 current_spark = spark
-
-# Barra de progresso
 pbar = tqdm(ch_tables.items(), total=len(ch_tables), desc="Migracao", unit="tabela")
 
 for i, (ch_tbl, oracle_tbl) in enumerate(pbar, 1):

@@ -1,0 +1,87 @@
+# Pipeline Snapshot + Hash + Delta (Oracle -> Bronze -> Silver -> Gold)
+# Alinhado aos notebooks testados no ClickHouse (track_bronze, track_silver, track_gold)
+# primary_keys: usadas na Silver (dedup) e Gold (comparacao de deltas)
+
+ref_date_source: env
+ref_date_env: REF_DATE
+
+clickhouse:
+  db_bronze: track_bronze
+  db_silver: track_silver
+  db_gold: track_gold
+
+tables:
+  - pipeline_name: SF2030
+    oracle:
+      schema: siga
+      table: SF2030
+    primary_keys:
+      - CODEMP
+      - CODFIL
+      - NUMNOTA
+      - CODCLI
+      - CODSEQ
+
+  - pipeline_name: SD2030
+    oracle:
+      schema: siga
+      table: SD2030
+    primary_keys:
+      - CODEMP
+      - CODFIL
+      - NUMNOTA
+      - SEQNOTA
+
+  - pipeline_name: SC5030
+    oracle:
+      schema: siga
+      table: SC5030
+    primary_keys: []
+
+  - pipeline_name: SC6030
+    oracle:
+      schema: siga
+      table: SC6030
+    primary_keys: []
+
+  - pipeline_name: ZTX030
+    oracle:
+      schema: siga
+      table: ZTX030
+    primary_keys: []
+
+  - pipeline_name: depara_cliente
+    oracle:
+      schema: ginf
+      table: depara_cliente
+    primary_keys: []
+
+  - pipeline_name: base_cep_completa
+    oracle:
+      schema: ginf
+      table: BASE_CEP_COMPLETA
+    primary_keys: []
+
+  - pipeline_name: TST_CONTRATOS_BI
+    oracle:
+      schema: ginf
+      table: TST_CONTRATOS_BI
+    primary_keys: []
+
+  - pipeline_name: TST_HISTORICO_SOLICITACOES
+    oracle:
+      schema: ginf
+      table: TST_HISTORICO_SOLICITACOES
+    primary_keys: []
+
+  - pipeline_name: TST_SOLICIT_CADASTRADAS
+    oracle:
+      schema: ginf
+      table: TST_SOLICIT_CADASTRADAS
+    primary_keys: []
+
+  - pipeline_name: TST_CONTRATOS
+    oracle:
+      schema: ginf
+      table: TST_CONTRATOS
+    primary_keys: []

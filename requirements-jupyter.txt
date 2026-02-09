@@ -36,3 +36,6 @@ ipython-sql==0.5.0
 
 # Progress bar
 tqdm==4.66.1
+
+# Memoria (medicao RSS no pipeline)
+psutil>=5.9.0
