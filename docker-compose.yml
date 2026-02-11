@@ -139,6 +139,25 @@ services:
       - track-network
     restart: unless-stopped
     command: ["/opt/bitnami/spark/sbin/start-history-server.sh"]
+
+  clickstack:
+    image: clickhouse/clickstack-all-in-one:latest
+    container_name: clickstack
+    env_file:
+      - .env
+    environment:
+      CLICKHOUSE_ENDPOINT: "https://${CLICKHOUSE_HOST:-localhost}:${CLICKHOUSE_PORT:-8443}"
+      CLICKHOUSE_USER: "${CLICKHOUSE_USER:-default}"
+      CLICKHOUSE_PASSWORD: "${CLICKHOUSE_PASSWORD}"
+    ports:
+      - "8080:8080"
+      - "4317:4317"
+      - "4318:4318"
+    networks:
+      - track-network
+    restart: unless-stopped
+    profiles:
+      - observability
 #
 #  # ============================================
 #  # Airflow - Banco de Metadados (Postgres)
