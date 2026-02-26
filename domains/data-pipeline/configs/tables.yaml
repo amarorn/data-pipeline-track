@@ -3,43 +3,200 @@
 # SLA: Diário às 02:00 UTC-3
 
 bronze_tables:
-  # Tabelas Oracle
-  - name: customers
+  - name: depara_cliente
     source:
       type: oracle
-      schema: SALES
-      table: CUSTOMERS
+      schema: ginf
+      table: depara_cliente
     ingestion:
-      mode: snapshot_full  # Conforme AGENTS.md: snapshot diário D-1
-      reference_date: D-1  # Data de referência do snapshot (não data de carga)
-      partition_column: ID
+      mode: snapshot
       num_partitions: 10
       fetch_size: 10000
     quality:
-      row_count_min: 1000
+      row_count_min: 1
       freshness_hours: 24
     metadata:
-      domain: sales
+      domain: ginf
       owner: data-team@track.com
-      pii: true
-      retention_days: 2555  # 7 anos
+      pii: false
+      retention_days: 2555
 
-  - name: orders
+  - name: base_cep_completa
     source:
       type: oracle
-      schema: SALES
-      table: ORDERS
+      schema: ginf
+      table: BASE_CEP_COMPLETA
     ingestion:
-      mode: snapshot_full  # Conforme AGENTS.md
-      reference_date: D-1
-      partition_column: ORDER_ID
-      num_partitions: 20
+      mode: snapshot
+      num_partitions: 10
       fetch_size: 10000
     quality:
-      row_count_min: 5000
-      freshness_hours: 6
+      row_count_min: 1
+      freshness_hours: 24
     metadata:
-      domain: sales
+      domain: ginf
+      owner: data-team@track.com
+      pii: false
+      retention_days: 2555
+
+  - name: tst_contratos_bi
+    source:
+      type: oracle
+      schema: ginf
+      table: TST_CONTRATOS_BI
+    ingestion:
+      mode: snapshot
+      num_partitions: 10
+      fetch_size: 10000
+    quality:
+      row_count_min: 1
+      freshness_hours: 24
+    metadata:
+      domain: ginf
+      owner: data-team@track.com
+      pii: false
+      retention_days: 2555
+
+  - name: sc5030
+    source:
+      type: oracle
+      schema: siga
+      table: SC5030
+    ingestion:
+      mode: snapshot
+      num_partitions: 10
+      fetch_size: 10000
+    quality:
+      row_count_min: 1
+      freshness_hours: 24
+    metadata:
+      domain: siga
+      owner: data-team@track.com
+      pii: false
+      retention_days: 2555
+
+  - name: sc6030
+    source:
+      type: oracle
+      schema: siga
+      table: SC6030
+    ingestion:
+      mode: snapshot
+      num_partitions: 10
+      fetch_size: 10000
+    quality:
+      row_count_min: 1
+      freshness_hours: 24
+    metadata:
+      domain: siga
+      owner: data-team@track.com
+      pii: false
+      retention_days: 2555
+
+  - name: tst_historico_solicitacoes
+    source:
+      type: oracle
+      schema: ginf
+      table: TST_HISTORICO_SOLICITACOES
+    ingestion:
+      mode: snapshot
+      num_partitions: 10
+      fetch_size: 10000
+    quality:
+      row_count_min: 1
+      freshness_hours: 24
+    metadata:
+      domain: ginf
+      owner: data-team@track.com
+      pii: false
+      retention_days: 2555
+
+  - name: tst_solicit_cadastradas
+    source:
+      type: oracle
+      schema: ginf
+      table: TST_SOLICIT_CADASTRADAS
+    ingestion:
+      mode: snapshot
+      num_partitions: 10
+      fetch_size: 10000
+    quality:
+      row_count_min: 1
+      freshness_hours: 24
+    metadata:
+      domain: ginf
+      owner: data-team@track.com
+      pii: false
+      retention_days: 2555
+
+  - name: sd2030
+    source:
+      type: oracle
+      schema: siga
+      table: SD2030
+    ingestion:
+      mode: snapshot
+      num_partitions: 10
+      fetch_size: 10000
+    quality:
+      row_count_min: 1
+      freshness_hours: 24
+    metadata:
+      domain: siga
+      owner: data-team@track.com
+      pii: false
+      retention_days: 2555
+
+  - name: sf2030
+    source:
+      type: oracle
+      schema: siga
+      table: SF2030
+    ingestion:
+      mode: snapshot
+      num_partitions: 10
+      fetch_size: 10000
+    quality:
+      row_count_min: 1
+      freshness_hours: 24
+    metadata:
+      domain: siga
+      owner: data-team@track.com
+      pii: false
+      retention_days: 2555
+
+  - name: ztx030
+    source:
+      type: oracle
+      schema: siga
+      table: ZTX030
+    ingestion:
+      mode: snapshot
+      num_partitions: 10
+      fetch_size: 10000
+    quality:
+      row_count_min: 1
+      freshness_hours: 24
+    metadata:
+      domain: siga
+      owner: data-team@track.com
+      pii: false
+      retention_days: 2555
+
+  - name: tst_contratos
+    source:
+      type: oracle
+      schema: ginf
+      table: TST_CONTRATOS
+    ingestion:
+      mode: snapshot
+      num_partitions: 10
+      fetch_size: 10000
+    quality:
+      row_count_min: 1
+      freshness_hours: 24
+    metadata:
+      domain: ginf
       owner: data-team@track.com
       pii: false
       retention_days: 2555
@@ -60,8 +217,7 @@ silver_transformations:
           name: string
           email: string
           created_at: timestamp
-    # Camada silver deve particionar por data de referência do snapshot
-    partition_by: [reference_date]
+    partition_by: [created_date]
 
 gold_metrics:
   daily_sales_summary:

@@ -1,31 +1,16 @@
 """
-Runner da camada Bronze para o domínio data-pipeline.
-Executa snapshots D-1 do Oracle para Bronze.
+Runner Bronze: ingestao Oracle -> ClickHouse track_bronze.
+Invocado pelo orquestrador (pipelines.yaml).
 """
-from __future__ import annotations
-
-import yaml
+import sys
 from pathlib import Path
 
-from track_platform.logging import get_pipeline_logger
-from .oracle_ingestion import OracleBronzeIngestion
+_root = Path(__file__).resolve().parents[3]
+if str(_root) not in sys.path:
+    sys.path.insert(0, str(_root))
+
+from apps.orchestrator.snapshot_hash_delta_pipeline import run_pipeline
 
 
-def run() -> None:
-    logger = get_pipeline_logger("data-pipeline/bronze")
-    config_file = Path(__file__).resolve().parents[1] / "configs" / "tables.yaml"
-    config = yaml.safe_load(config_file.read_text())
-
-    ingestion = OracleBronzeIngestion()
-    for t in config.get("bronze_tables", []):
-        if t.get("source", {}).get("type") != "oracle":
-            continue
-        logger.info(f"Ingerindo {t['source'].get('schema')}.{t['source'].get('table')}")
-        ingestion.ingest_table(
-            table=t["source"]["table"],
-            schema=t["source"].get("schema"),
-            partition_column=t.get("ingestion", {}).get("partition_column"),
-            num_partitions=int(t.get("ingestion", {}).get("num_partitions", 1)),
-            reference_date=t.get("ingestion", {}).get("reference_date"),
-        )
-
+def run():
+    run_pipeline(layer="bronze")

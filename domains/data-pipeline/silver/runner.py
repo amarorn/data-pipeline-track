@@ -1,35 +1,16 @@
 """
-Runner da camada Silver para o domínio data-pipeline.
+Runner Silver: Bronze -> normalizacao + row_hash -> track_silver.
+Invocado pelo orquestrador (pipelines.yaml).
 """
-from __future__ import annotations
+import sys
+from pathlib import Path
 
-from pyspark.sql import functions as F
+_root = Path(__file__).resolve().parents[3]
+if str(_root) not in sys.path:
+    sys.path.insert(0, str(_root))
 
-from track_platform.spark import SparkSessionManager
-from track_platform.logging import get_pipeline_logger
-from track_platform.storage import StorageManager
-from .transformations import SilverProcessor
+from apps.orchestrator.snapshot_hash_delta_pipeline import run_pipeline
 
 
-def run() -> None:
-    logger = get_pipeline_logger("data-pipeline/silver")
-    spark = SparkSessionManager.get_session(app_name="Track-Silver-Runner")
-    storage = StorageManager()
-
-    # Entrada: bronze/oracle/* do dia de referência (D-1). Para simplicidade, lê tudo e processa.
-    # Em ambiente real, filtrar por reference_date específico.
-    input_path = f"{storage.base_path}/bronze/oracle/*"
-    logger.info(f"Lendo bronze de: {input_path}")
-    df = spark.read.parquet(input_path)
-
-    processor = SilverProcessor()
-    df_silver = processor.process(
-        df,
-        reference_date_col="reference_date",
-        exclude_from_hash={"_ingestion_timestamp", "_source", "_source_table"},
-        source="oracle",
-        entity="consolidated",
-    )
-
-    logger.info(f"Registros na silver: {df_silver.count()}")
-
+def run():
+    run_pipeline(layer="silver")

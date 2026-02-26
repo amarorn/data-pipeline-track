@@ -1,13 +1,16 @@
 """
-Placeholder da camada Gold para o domínio data-pipeline.
-Consolida métricas históricas a partir da Silver.
+Runner Gold: comparacao Silver D-1 vs D-2 -> deltas em track_gold.
+Invocado pelo orquestrador (pipelines.yaml).
 """
-from __future__ import annotations
+import sys
+from pathlib import Path
 
-from track_platform.logging import get_pipeline_logger
+_root = Path(__file__).resolve().parents[3]
+if str(_root) not in sys.path:
+    sys.path.insert(0, str(_root))
+
+from apps.orchestrator.snapshot_hash_delta_pipeline import run_pipeline
 
 
-def run() -> None:
-    logger = get_pipeline_logger("data-pipeline/gold")
-    logger.info("Camada gold ainda não implementada. Placeholder ativo.")
-
+def run():
+    run_pipeline(layer="gold")
